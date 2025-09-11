@@ -1,0 +1,33 @@
+# Emacs files
+*~
+\#*\#
+.\#*
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Temporary files
+/tmp/
+*.tmp
+*.temp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Package files
+*.tar
+*.gz
+*.zip
+
+# Log files
+*.log
+
+# Personal API keys (if stored in files)
+api-key.txt
+.env
