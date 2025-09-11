@@ -1,8 +1,10 @@
 ;; Your existing gptel setup (backend/model) here, e.g.:
-;; (use-package gptel :ensure t)
-;; (setq gptel-backend (gptel-make-openai ...))
-;; (gptel-set-backend gptel-backend) ; if available
-;; (defvar gptel-model "gpt-5-mini") (gptel-set-model "gpt-5-mini")
+
+;; (require 'my-chat-gpt)
+;; (global-set-key (kbd "C-c g") #'gptel-change-region)
+;; (global-set-key (kbd "C-c r") #'gptel-review-region)
+;; (global-set-key (kbd "C-c e") #'gptel-explain-region)
+;; (global-set-key (kbd "C-c a") #'gptel-ask-about-region)
 
 (use-package gptel :ensure t)
 
