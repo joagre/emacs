@@ -7,6 +7,8 @@
 ;; 2025-09-11 Initial version
 ;;
 ;; Installation:
+;; * This file requires the 'gptel' package. Install it via MELPA if you haven't already.
+;;   You can install it by running M-x package-install RET gptel RET
 ;; * Add this file to your Emacs load-path and add the following to your init file (e.g. ~/.emacs or ~/.emacs.d/init.el):
 ;; * Make sure you have set your OpenAI API key in ~/.authinfo
 ;;   Example entry in ~/.authinfo:
