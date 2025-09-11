@@ -1,0 +1,26 @@
+# Emacs
+*~
+\#*\#
+.\#*
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Package directories
+elpa/
+straight/
+
+# Custom file
+custom.el
+
+# Backups
+*~
+*.bak
+
+# Temporary files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
