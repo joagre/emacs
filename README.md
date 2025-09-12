@@ -1,18 +1,28 @@
-# Emacs extensions
+# ChatGPT extensions for Emacs
+
+## Overview
+
+This file provides simple Emacs commands to interact with ChatGPT
+(via the gptel package) for code-related tasks. It includes commands
+to change, review, explain, and ask questions about the selected region.
+Responses are either inserted back into the buffer (for changes) or
+logged in a dedicated buffer (for reviews, explanations, and questions).
+The commands use a consistent prompt style to guide the model's responses.
+The log buffer keeps a history of interactions with timestamps and model info.
 
 ## Installation
 
-* This file requires the gptel package. Install it, for example, via MELPA if you haven't already. You can install it by running `M-x package-install RET gptel RET`
-* Put this file in your load-path.
-* Put the OpenAI API key in `~/.authinfo`, e.g. `machine api.openai.com login apikey password sk-proj-***`
+* Install the gptel package
+* Put this file in your load-path
+* Put the OpenAI API key in ~/.authinfo
 * Get an OpenAI API key from https://platform.openai.com/account/api-keys
 
-## How to use
+Add this to your Emacs config:
 
 ```
 (require 'my-chat-gpt)
-(global-set-key (kbd "C-c g") #'gptel-change-region)
 (global-set-key (kbd "C-c r") #'gptel-review-region)
 (global-set-key (kbd "C-c e") #'gptel-explain-region)
 (global-set-key (kbd "C-c a") #'gptel-ask-about-region)
+(global-set-key (kbd "C-c g") #'gptel-change-region)
 ```
