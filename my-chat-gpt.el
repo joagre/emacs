@@ -125,49 +125,55 @@ If SESSION is non-nil, include it in the banner."
          (chatb (my/gptel--ensure-session-buffer))
          (sname (buffer-name chatb))
          (hdr   (my/gptel--insert-log-header logb log-title model sname)))
-    (if question
-        (with-current-buffer logb
-          (goto-char (marker-position hdr))
-          (insert (format "Question: %s\n\n" question)))
-      (when (window-live-p win) (select-window win) (goto-char hdr)))
+    ;; Write header (and optional question) immediately
+    (when (buffer-live-p logb)
+      (with-current-buffer logb
+        (goto-char (marker-position hdr))
+        (when question
+          (insert (format "Question: %s\n\n" question)))))
+    ;; Focus the log buffer at the header
+    (let ((lw (or (get-buffer-window logb t)
+                  (display-buffer
+                   logb
+                   '((display-buffer-reuse-window display-buffer-pop-up-window)
+                     (inhibit-same-window . t))))))
+      (when (window-live-p lw)
+        (select-window lw)
+        (goto-char hdr)))
+    ;; Send request using the persistent session; no in-place UI
     (gptel-request
-        (concat prompt code)
-      :stream nil
-      :buffer chatb
-      :position (with-current-buffer chatb (point-max))
-      :context `(:logbuf ,logb :win ,win :hdr ,hdr)
-      :system "You are a senior engineer. Be precise, concise, and practical."
-      :callback
-      (lambda (response info)
-        (let* ((ctx  (or (plist-get info :context) (alist-get :context info)))
-               (lb   (plist-get ctx :logbuf))
-               (win  (plist-get ctx :win))
-               (hdr  (plist-get ctx :hdr))
-               (err  (or (plist-get info :error)
-                         (alist-get 'error info)))
-               (http (or (plist-get info :http-status)
-                         (alist-get 'http-status info)))
-               (stat (or (plist-get info :status)
-                         (alist-get 'status info)))
-               (text (cond
-                      (err (format "[ERROR] http=%s status=%s\n%S\n"
-                                   (or http "?") (or stat "?") err))
-                      ((stringp response) response)
-                      ((and (listp response) (plist-get response :content))
-                       (plist-get response :content))
-                      (t (format "%s" response)))))
-          (when (buffer-live-p lb)
-            (with-current-buffer lb
-              (save-excursion
-                (goto-char (point-max))
-                (insert text "\n\n"))))
-          ;; restore point to header after appending
-          (when (and (window-live-p win) (markerp hdr))
-            (select-window win)
-            (goto-char hdr)))))))
+     (concat prompt code)
+     :stream  nil
+     :buffer  chatb               ;; reuse same chat session for context
+     :context `(:logbuf ,logb :win ,win :hdr ,hdr)
+     :system  "You are a senior engineer. Be precise, concise, and practical."
+     :callback
+     (lambda (response info)
+       (let* ((ctx  (or (plist-get info :context) (alist-get :context info)))
+              (lb   (plist-get ctx :logbuf))
+              (win  (plist-get ctx :win))
+              (hdr  (plist-get ctx :hdr))
+              (err  (or (plist-get info :error) (alist-get 'error info)))
+              (http (or (plist-get info :http-status) (alist-get 'http-status info)))
+              (stat (or (plist-get info :status)      (alist-get 'status info)))
+              (text (cond
+                     (err (format "[ERROR] http=%s status=%s\n%S\n"
+                                  (or http "?") (or stat "?") err))
+                     ((stringp response) response)
+                     ((and (listp response) (plist-get response :content))
+                      (plist-get response :content))
+                     (t (format "%s" response)))))
+         (when (buffer-live-p lb)
+           (with-current-buffer lb
+             (save-excursion
+               (goto-char (point-max))
+               (insert text "\n\n"))))
+         ;; Keep the log window showing the header without stealing focus from user
+         (when (and (window-live-p win) (markerp hdr))
+           (set-window-point win (marker-position hdr))))))))
 
 (defun gptel-review-region ()
-  (interactive)
+    (interactive)
   (my/gptel--prompt-region
    "Code Review"
    "Review the following code. Be concrete and terse.\n\
