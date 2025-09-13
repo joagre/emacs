@@ -24,40 +24,44 @@
 ;; Add this to your Emacs config:
 ;;
 ;; (require 'my-chat-gpt)
+;; (setq gptel-model 'gpt-5-mini))
 ;; (global-set-key (kbd "C-c r") #'gptel-review-region)
 ;; (global-set-key (kbd "C-c e") #'gptel-explain-region)
 ;; (global-set-key (kbd "C-c a") #'gptel-ask-about-region)
 ;; (global-set-key (kbd "C-c g") #'gptel-change-region)
 
-(use-package gptel :ensure t)
-
-(unless (boundp 'gptel-backend)
-  (setq gptel-backend
-        (gptel-make-openai "OpenAI"
-          :host "api.openai.com"
-          :endpoint "/v1/chat/completions"
-          :models '("gpt-5-mini" "gpt-5" "gpt-5-nano" "gpt-4o" "gpt-4o-mini"))))
-(when (fboundp 'gptel-set-backend)
-  (gptel-set-backend gptel-backend))
-
-(unless (boundp 'gptel-model)
-  (defvar gptel-model "gpt-5-mini"))
-(when (fboundp 'gptel-set-model)
-  (gptel-set-model "gpt-5-mini"))
+(use-package gptel
+  :ensure t
+  :config
+  (let ((key (or (getenv "OPENAI_API_KEY")
+                 (auth-source-pick-first-password
+                  :host "api.openai.com" :user "apikey"))))
+    (unless key
+      (error "No OpenAI key for api.openai.com (login apikey)"))
+    (setq gptel-backend
+          (gptel-make-openai "OpenAI"
+            :host "api.openai.com"
+            :endpoint "/v1/chat/completions"
+            :key key)))
+  (setq gptel-model 'gpt-5-mini))
 
 (defun my/gptel--open-log ()
   "Show and reuse the single chat log buffer/window. Return (BUF . WIN)."
-  (let* ((buf (get-buffer-create "chat-gpt-log"))
+  (let* ((buf (get-buffer-create "*chat-gpt-log*"))
          (win (or (get-buffer-window buf t)
                   (display-buffer
                    buf
-                   '((display-buffer-reuse-window
-                      display-buffer-pop-up-window)
+                   '((display-buffer-reuse-window display-buffer-pop-up-window)
                      (inhibit-same-window . t))))))
-    (with-current-buffer buf
-      (read-only-mode -1)
-      (goto-char (point-max)))
+    (when win
+      (with-current-buffer buf
+        (read-only-mode -1)
+        (goto-char (point-max))
+        (set-window-point win (point))))
     (cons buf win)))
+
+;;;;
+
 
 (defun my/gptel--insert-log-header (buf title model &optional session)
   "Insert a banner into BUF and return a marker at its beginning.
