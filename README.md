@@ -20,9 +20,10 @@ The log buffer keeps a history of interactions with timestamps and model info.
 Add this to your Emacs config:
 
 ```
-(require 'my-chat-gpt)
-(global-set-key (kbd "C-c r") #'gptel-review-region)
-(global-set-key (kbd "C-c e") #'gptel-explain-region)
-(global-set-key (kbd "C-c a") #'gptel-ask-about-region)
-(global-set-key (kbd "C-c g") #'gptel-change-region)
+(require 'gptx)
+(setq gptx-model 'gpt-5-mini)
+(global-set-key (kbd "C-c r") #'gptx-review)
+(global-set-key (kbd "C-c e") #'gptx-explain)
+(global-set-key (kbd "C-c a") #'gptx-ask)
+(global-set-key (kbd "C-c c") #'gptx-change)
 ```
