@@ -17,10 +17,10 @@
 ;;
 ;; Features:
 ;; - Repo-scoped chat session buffer per project.
-;; - Shared log buffer (`gptx-log-buffer') opened in a side window; placement and size
-;;   controlled by `gptx-log-window-placement' and `gptx-log-window-size'.
+;; - Shared log buffer.
 ;; - Mode-line spinner while requests are in flight.
-;; - For in-place rewrites, a unified diff is logged that compares before and after.
+;; - For in-place rewrites, a unified diff is logged that compares before and
+;;   after.
 
 ;; Installation:
 ;; - Install the gptel package
@@ -47,7 +47,7 @@
 ;;   ;; Optional window setup
 ;;   (setq gptx-log-window-placement 'right
 ;;         gptx-log-window-size 0.40)
-;;   ;; Suggested key bindings (users may prefer local or mode-specific bindings)
+;;   ;; Suggested key bindings
 ;;   (global-set-key (kbd "C-c r") #'gptx-review)
 ;;   (global-set-key (kbd "C-c e") #'gptx-explain)
 ;;   (global-set-key (kbd "C-c a") #'gptx-ask)

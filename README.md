@@ -10,8 +10,7 @@ region or on the whole buffer when no region is active (see
 ## Features
 
 * Repo-scoped chat session buffer per project.
-* Shared log buffer (`gptx-log-buffer') opened in a side window; placement and
-  size controlled by `gptx-log-window-placement' and `gptx-log-window-size'.
+* Shared log buffer.
 * Mode-line spinner while requests are in flight.
 * For in-place rewrites, a unified diff is logged that compares before and
   after.
@@ -47,6 +46,7 @@ region or on the whole buffer when no region is active (see
 ;; Optional window setup
 (setq gptx-log-window-placement 'right
       gptx-log-window-size 0.40)
+;; Suggested key bindings
 (global-set-key (kbd "C-c r") #'gptx-review)
 (global-set-key (kbd "C-c e") #'gptx-explain)
 (global-set-key (kbd "C-c a") #'gptx-ask)
