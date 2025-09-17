@@ -46,7 +46,7 @@
 ;;   (setq gptx-model 'gpt-5-mini)
 ;;   ;; Optional window setup
 ;;   (setq gptx-log-window-placement 'right
-;;         gptx-log-window-size 0.40)
+;;         gptx-log-window-size 0.50)
 ;;   ;; Suggested key bindings
 ;;   (global-set-key (kbd "C-c r") #'gptx-review)
 ;;   (global-set-key (kbd "C-c e") #'gptx-explain)
@@ -124,7 +124,7 @@ Valid values: 'right, 'left, 'below, 'above."
                  (const :tag "Above" above))
   :group 'gptx)
 
-(defcustom gptx-log-window-size 0.40
+(defcustom gptx-log-window-size 0.50
   "Fraction of frame width/height for the log window."
   :type 'number
   :group 'gptx)
@@ -244,7 +244,7 @@ Ensure it is a proper special-mode and make it writable for appends."
     (let ((start (point)))
       (insert (format "=== %s | %s | %s%s ===\n\n"
                       title
-                      (format-time-string "%H:%M:%S")
+                      (format-time-string "%Y-%m-%d %H:%M:%S")
                       (or model "unknown")
                       (if session (format " | %s" session) "")))
       (copy-marker start t))))
@@ -270,7 +270,8 @@ Ensure it is a proper special-mode and make it writable for appends."
     ;; Turning off. Stop spinner and remove segment.
     (gptx--spinner-stop)
     (setq mode-line-format
-          (remove '(:eval (gptx--spinner-segment)) mode-line-format))))
+          (remove '(:eval (gptx--spinner-segment))
+                  (remove " " mode-line-format)))))
 
 (defun gptx--spinner-start (&optional buffer)
   "Start a spinner in BUFFER or current buffer."
@@ -357,7 +358,8 @@ otherwise falls back to a trivial internal implementation."
 (defun gptx--prompt (log-title prompt question beg end)
   "Send code slice [BEG, END) with PROMPT to gptel and log."
   (gptx--ensure-backend)
-  (let* ((chatb (gptx--ensure-session-buffer))
+  (let* ((buf   (current-buffer))
+         (chatb (gptx--ensure-session-buffer))
          (_model(gptx--ensure-symbol-model chatb gptx-model))
          (code (gptx--slice beg end))
          (bw (gptx--open-log))
@@ -376,7 +378,7 @@ otherwise falls back to a trivial internal implementation."
     (when (and (window-live-p win) (markerp hdr))
       (set-window-point win (marker-position hdr)))
     ;; Start spinners in all involved buffers
-    (gptx--spinner-start (current-buffer))
+    (gptx--spinner-start buf)
     (gptx--spinner-start chatb)
     (when (buffer-live-p logb) (gptx--spinner-start logb))
     ;; Send request
@@ -385,12 +387,11 @@ otherwise falls back to a trivial internal implementation."
     (gptel-request
      payload
      :buffer  chatb
-     :context `(:logbuf ,logb :win ,win :hdr ,hdr)
      :system  gptx-system
      :callback
      (lambda (response info)
        ;; Stop spinners in all involved buffers
-       (gptx--spinner-stop (current-buffer))
+       (gptx--spinner-stop buf)
        (gptx--spinner-stop chatb)
        (when (buffer-live-p logb)
          (gptx--spinner-stop logb))
