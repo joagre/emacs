@@ -8,22 +8,55 @@
 ;; License: MIT
 ;; URL:
 ;;
-;;; Commentary:
+;; Overview:
+;; gptx provides lean, predictable workflows around gptel for working with code.
+;; It keeps a persistent, repo-scoped chat buffer per project and a shared log
+;; buffer. All high-level commands are region-aware and operate on the active
+;; region or on the whole buffer when no region is active (see
+;; `gptx-act-on-buffer-when-no-region').
 ;;
-;; Region-aware helpers around gptel:
-;; - Review, Explain, Ask: send code to a persistent repo-scoped chat buffer,
-;;   append responses to a single log buffer.
-;; - Change: rewrite region or buffer in place with minimal ceremony.
+;; Features:
+;; - Repo-scoped chat session buffer per project.
+;; - Shared log buffer (`gptx-log-buffer') opened in a side window; placement and size
+;;   controlled by `gptx-log-window-placement' and `gptx-log-window-size'.
+;; - Mode-line spinner while requests are in flight.
+;; - For in-place rewrites, a unified diff is logged that compares before and after.
+
+;; Installation:
+;; - Install the gptel package
+;; - Put this file in your load-path
+;; - Put the OpenAI API key in ~/.authinfo
+;; - Get an OpenAI API key from https://platform.openai.com/account/api-keys
+;;
+;; Non-mutating commands:
+;; - `gptx-review'          (C-c r)  Review code. Focus on correctness and risk.
+;; - `gptx-explain'         (C-c e)  Explain intent, flow, invariants, complexity, and edge cases.
+;; - `gptx-ask'             (C-c a)  Answer a free-form question about the code with minimal snippets.
+;; - `gptx-write-unit-tests'(C-c u)  Generate focused unit tests and a compact test plan.
+;; - `gptx-debug-code'      (C-c d)  Produce a concrete debugging plan with optional tiny diffs.
+;; - `gptx-troubleshoot-code'(C-c t) Identify likely failure points and fixes by inspection.
+;;
+;; Mutating commands:
+;; - `gptx-change'          (C-c c)  Rewrite region or buffer in place. Logs a unified diff.
+;; - `gptx-improve-code'    (C-c h)  Improve code quality without changing public behavior.
+;; - `gptx-document-code'   (C-c D)  Insert idiomatic documentation comments and docstrings only.
 ;;
 ;; Example usage:
 ;;   (require 'gptx)
 ;;   (setq gptx-model 'gpt-5-mini)
+;;   ;; Optional window setup
+;;   (setq gptx-log-window-placement 'right
+;;         gptx-log-window-size 0.40)
+;;   ;; Suggested key bindings (users may prefer local or mode-specific bindings)
 ;;   (global-set-key (kbd "C-c r") #'gptx-review)
 ;;   (global-set-key (kbd "C-c e") #'gptx-explain)
 ;;   (global-set-key (kbd "C-c a") #'gptx-ask)
 ;;   (global-set-key (kbd "C-c c") #'gptx-change)
-;;
-;;; Code:
+;;   (global-set-key (kbd "C-c u") #'gptx-write-unit-tests)
+;;   (global-set-key (kbd "C-c d") #'gptx-debug-code)
+;;   (global-set-key (kbd "C-c D") #'gptx-document-code)
+;;   (global-set-key (kbd "C-c t") #'gptx-troubleshoot-code)
+;;   (global-set-key (kbd "C-c h") #'gptx-improve-code)
 
 (eval-when-compile (require 'subr-x))
 (require 'cl-lib)
@@ -502,9 +535,13 @@ otherwise falls back to a trivial internal implementation."
     (gptx--prompt
      "Review code"
      "Review the following code. Be concrete and terse.\n\
-- Find bugs, undefined behavior, API misuse.\n\
-- Note edge cases and complexity hotspots.\n\
-- Suggest exact fixes. Use minimal diffs or snippets only when needed.\n\n\
+- Report issues first and label severity: critical, major, minor.\n\
+- For each issue: one line diagnosis, smallest relevant quote or line ref, and the exact fix.\n\
+- Prefer minimal unified diff or precise replacement for fixes when useful.\n\
+- Call out undefined behavior, API misuse, resource leaks, concurrency hazards, input validation, and security risks.\n\
+- Identify complexity hotspots and give big O where it matters.\n\
+- If clean, write: No defects found.\n\
+- Output: tight bullet list. Use fenced code only for diffs or short snippets.\n\n\
 CODE:\n\n"
      nil beg end)))
 
@@ -516,11 +553,13 @@ CODE:\n\n"
     (gptx--prompt
      "Explain code"
      "Explain this code clearly and concisely for an experienced developer.\n\
-- What it does step by step.\n\
-- Key data flows and invariants.\n\
-- Time and space complexity for hot paths.\n\
-- Edge cases and failure modes.\n\
-- Provide a short commented version if helpful.\n\n\
+- Purpose in two sentences.\n\
+- Step by step of the main flow.\n\
+- Key data structures, invariants, preconditions, postconditions.\n\
+- Complexity for hot paths. Mention space if relevant.\n\
+- Edge cases and failure modes. Note how they are handled or not.\n\
+- Provide a short commented version of the core function if helpful.\n\
+- Keep it under 200 words unless the snippet is large.\n\n\
 CODE:\n\n"
      nil beg end)))
 
@@ -530,9 +569,11 @@ CODE:\n\n"
   (interactive "sQuestion: ")
   (cl-destructuring-bind (beg . end) (gptx--region-or-buffer)
     (gptx--prompt
-     "Question code"
-     (concat "Answer the user's QUESTION about the following code.\n"
-             "Be precise and concise. If relevant, include minimal snippets.\n\n"
+     "Ask about code"
+     (concat "Answer the user's QUESTION about the following code. Be precise and concise.\n"
+             "- Base the answer strictly on the provided code. If information is missing, say what is missing and state the minimal assumption you make.\n"
+             "- If multiple outcomes are possible, list the options and the trade offs.\n"
+             "- Include a minimal snippet only if it clarifies the point.\n\n"
              "QUESTION:\n" question "\n\nCODE:\n\n")
      question beg end)))
 
@@ -543,5 +584,85 @@ CODE:\n\n"
   (cl-destructuring-bind (beg . end) (gptx--region-or-buffer)
     (deactivate-mark)
     (gptx--change prompt beg end)))
+
+;;;###autoload
+(defun gptx-write-unit-tests ()
+  "Generate focused unit tests for the active region or whole buffer."
+  (interactive)
+  (cl-destructuring-bind (beg . end) (gptx--region-or-buffer)
+    (gptx--prompt
+     "Write unit tests"
+     "Write focused unit tests for the following code.\n\
+- Detect language and existing test framework from context; if none, choose a common minimal framework for this language and state it in one line.\n\
+- Cover: happy path, edge cases, error paths, boundary conditions, resource handling, and concurrency where relevant.\n\
+- Keep tests small and isolated; use minimal mocking and no real network or filesystem unless the code requires it.\n\
+- Name tests descriptively; make arrange, act, assert clear.\n\
+- If helpful, first output a compact bullet test plan, then the test code.\n\
+- Output: test code only after the plan; keep boilerplate minimal.\n\n\
+CODE:\n\n"
+     nil beg end)))
+
+;;;###autoload
+(defun gptx-debug-code ()
+  "Produce a concrete debugging plan for the active region or whole buffer."
+  (interactive)
+  (cl-destructuring-bind (beg . end) (gptx--region-or-buffer)
+    (gptx--prompt
+     "Debug code"
+     "Debug the following code. Produce a concrete, stepwise plan.\n\
+- List top suspected root causes ranked with short reasons.\n\
+- Show how to reproduce: inputs, environment, and exact commands.\n\
+- Propose minimal instrumentation: logging, assertions, or traces. Provide a tiny patch as a unified diff when useful.\n\
+- Include debugger or tooling commands suitable for this language.\n\
+- Do not rewrite logic unless an obvious one-line fix exists; if so, show the minimal diff.\n\
+- Output: numbered steps, then optional short diffs or snippets.\n\n\
+CODE:\n\n"
+     nil beg end)))
+
+;;;###autoload
+(defun gptx-troubleshoot-code ()
+  "Identify likely failure points and fixes in the active region or buffer."
+  (interactive)
+  (cl-destructuring-bind (beg . end) (gptx--region-or-buffer)
+    (gptx--prompt
+     "Troubleshoot code"
+     "Troubleshoot the following code by inspection.\n\
+- Identify likely failure points: unhandled errors, nil/null risk, off-by-one, races, performance traps, and API misuses.\n\
+- For each: show the symptom signature, how to confirm it, and the fix outline. Provide minimal diffs when appropriate.\n\
+- Suggest runtime guardrails or sanity checks that are safe to add.\n\
+- Keep it concise; prefer bullets.\n\n\
+CODE:\n\n"
+     nil beg end)))
+
+;;;###autoload
+(defun gptx-improve-code ()
+  "Improve code quality without changing public behavior."
+  (interactive)
+  (cl-destructuring-bind (beg . end) (gptx--region-or-buffer)
+    (deactivate-mark)
+    (gptx--change
+     "Improve this code without changing public behavior.\n\
+- Keep semantics and public API stable; preserve I/O, error shapes, and concurrency semantics.\n\
+- Remove duplication and dead code; simplify control flow; prefer clear names and small functions.\n\
+- Make it idiomatic for the detected language and ecosystem.\n\
+- Strengthen error handling; avoid hidden globals; prefer pure functions when possible.\n\
+- Replace ad hoc utilities with standard library equivalents when safe.\n\
+- Do not add dependencies. Return code only.\n"
+     beg end)))
+
+;;;###autoload
+(defun gptx-document-code ()
+  "Insert documentation comments and docstrings, no behavior changes."
+  (interactive)
+  (cl-destructuring-bind (beg . end) (gptx--region-or-buffer)
+    (deactivate-mark)
+    (gptx--change
+     "Add documentation comments and docstrings to this code. No behavior changes.\n\
+- Detect the language and use its idiomatic style: docstrings for Python, JSDoc for JS/TS, Doxygen for C/C++, Elisp-style commentary for Emacs Lisp, etc.\n\
+- For each public function, class, and module: describe purpose, parameters, return values, side effects, error conditions, and preconditions.\n\
+- Keep comments concise and technical; do not add marketing language.\n\
+- Preserve existing comments; update only if clearly wrong.\n\
+- Do not reformat code beyond inserting docs. Return code only.\n"
+     beg end)))
 
 (provide 'gptx)
