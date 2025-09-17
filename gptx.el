@@ -2,7 +2,7 @@
 ;;
 ;; Author: Joakim G.
 ;; Maintainer: Joakim G.
-;; Version: 0.2
+;; Version: 1.0
 ;; Package-Requires: ((emacs "28.1") (gptel "0.8"))
 ;; Keywords: convenience, tools, ai
 ;; License: MIT
@@ -25,8 +25,8 @@
 ;; Installation:
 ;; - Install the gptel package
 ;; - Put gptx.el in your load-path
-;; - Get an OpenAI API key from https://platform.openai.com/account/api-keys
-;; - Put the OpenAI API key in ~/.authinfo
+;; - Get OpenAI API key from https://platform.openai.com/account/api-keys
+;; - Put OpenAI API key in ~/.authinfo: machine api.openai.com login apikey password sk-****
 ;;
 ;; Non-mutating commands:
 ;; - gptx-review - Review code. Focus on correctness and risk.

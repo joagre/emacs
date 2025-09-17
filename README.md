@@ -1,6 +1,7 @@
 # ChatGPT extensions for Emacs
 
 ## Overview
+
 gptx provides lean, predictable workflows around gptel for working with code. It
 keeps a persistent, repo-scoped chat buffer per project and a shared log
 buffer. All high-level commands are region-aware and operate on the active
@@ -18,9 +19,9 @@ region or on the whole buffer when no region is active (see
 ## Installation
 
 * Install the gptel package
-* Put gotx.el in your load-path
-* Get an OpenAI API key from https://platform.openai.com/account/api-keys
-* Put the OpenAI API key in ~/.authinfo
+* Put gptx.el in your load-path
+* Get OpenAI API key from https://platform.openai.com/account/api-keys
+* Put OpenAI API key in ~/.authinfo: `machine api.openai.com login apikey password sk-****`
 
 ## Commands
 
