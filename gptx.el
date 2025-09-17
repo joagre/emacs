@@ -29,8 +29,9 @@
 (require 'cl-lib)
 (require 'auth-source)
 (require 'gptel)
+(require 'spinner)
 
-;; ----- Customization -------------------------------------------------
+;; ----- Customization and variables ---------------------------------
 
 (defgroup gptx nil
   "Lean, predictable gptel commands for code."
@@ -67,6 +68,19 @@
   "Trim the log buffer to approximately this many trailing lines."
   :type 'integer
   :group 'gptx)
+
+(defcustom gptx-spinner-type 'progress-bar
+  "Spinner type. See `spinner-types'."
+  :type '(choice symbol list)
+  :group 'gptx)
+
+(defcustom gptx-spinner-interval 0.1
+  "Seconds between spinner frames."
+  :type 'number
+  :group 'gptx)
+
+(defvar-local gptx--spinner nil
+  "Buffer-local spinner object for gptx activity.")
 
 ;; ----- Backend bootstrap --------------------------------------------
 
@@ -183,6 +197,47 @@ Ensure it is a proper special-mode and make it writable for appends."
                       (if session (format " | %s" session) "")))
       (copy-marker start t))))
 
+;; ----- Mode-line spinner --------------------------------------------
+
+(defun gptx--spinner-segment ()
+  "Return mode-line segment for the active spinner in this buffer."
+  (when (and gptx--spinner (spinner-p gptx--spinner))
+    (spinner-print gptx--spinner)))
+
+(define-minor-mode gptx-spinner-mode
+  "Show a gptx activity spinner in the mode line."
+  :init-value nil
+  :lighter ""
+  (if gptx-spinner-mode
+      ;; Add our segment once, buffer-locally.
+      (let ((seg '(:eval (gptx--spinner-segment))))
+        (make-local-variable 'mode-line-format)
+        (unless (member seg mode-line-format)
+          (setq mode-line-format
+                (append mode-line-format (list " " seg)))))
+    ;; Turning off. Stop spinner and remove segment.
+    (gptx--spinner-stop)
+    (setq mode-line-format
+          (remove '(:eval (gptx--spinner-segment)) mode-line-format))))
+
+(defun gptx--spinner-start (&optional buffer)
+  "Start a spinner in BUFFER or current buffer."
+  (with-current-buffer (or buffer (current-buffer))
+    (unless gptx-spinner-mode
+      (gptx-spinner-mode 1))
+    (gptx--spinner-stop)
+    (setq gptx--spinner (spinner-create gptx-spinner-type gptx-spinner-interval))
+    (spinner-start gptx--spinner)
+    ;; Auto-stop if the buffer is killed.
+    (add-hook 'kill-buffer-hook #'gptx--spinner-stop nil t)))
+
+(defun gptx--spinner-stop (&optional buffer)
+  "Stop the spinner in BUFFER or current buffer."
+  (with-current-buffer (or buffer (current-buffer))
+    (when (and gptx--spinner (spinner-p gptx--spinner))
+      (spinner-stop gptx--spinner)
+      (setq gptx--spinner nil))))
+
 ;; ----- Utilities ----------------------------------------------------
 
 (defun gptx--region-or-buffer ()
@@ -239,6 +294,12 @@ Ensure it is a proper special-mode and make it writable for appends."
     ;; Focus the log buffer at the header.
     (when (and (window-live-p win) (markerp hdr))
       (set-window-point win (marker-position hdr)))
+    ;; Start spinners in all involved buffers
+    (gptx--spinner-start (current-buffer))
+    (gptx--spinner-start chatb)
+    (when (buffer-live-p logb)
+      (gptx--spinner-start logb))
+    ;; Send request
     (message "[gptel] prompt %d chars model=%s session=%s"
              (length payload) (format "%s" gptel-model) sname)
     (gptel-request
@@ -248,6 +309,12 @@ Ensure it is a proper special-mode and make it writable for appends."
      :system  gptx-system
      :callback
      (lambda (response info)
+       ;; Stop spinners in all involved buffers
+       (gptx--spinner-stop (current-buffer))
+       (gptx--spinner-stop chatb)
+       (when (buffer-live-p logb)
+         (gptx--spinner-stop logb))
+       ;; Append the response or error to the log buffer
        (let* ((err (plist-get info :error))
               (text (cond
                      (err (format "[ERROR]\n%S" err))
@@ -270,6 +337,10 @@ Ensure it is a proper special-mode and make it writable for appends."
                           "\n\n---\nRewrite ONLY this code.\n"
                           "Return code only (no prose). Fences allowed.\n\n"
                           input)))
+    ;; Start spinners in all involved buffers
+    (gptx--spinner-start buf)
+    (gptx--spinner-start chatb)
+    ;; Send request
     (message "[gptel] change %d chars model=%s session=%s"
              (length payload) (format "%s" gptel-model) (buffer-name chatb))
     (gptel-request
@@ -282,10 +353,9 @@ Ensure it is a proper special-mode and make it writable for appends."
               (status (plist-get info :status))
               (http (plist-get info :http-status)))
          (cond
-          (err
-           (message "[gptel] ERROR (http=%s status=%s): %s"
-                    (or http "?") (or status "?")
-                    (if (stringp err) err (format "%S" err))))
+          (err (message "[gptel] ERROR (http=%s status=%s): %s"
+                        (or http "?") (or status "?")
+                        (if (stringp err) err (format "%S" err))))
           (t
            (let* ((rs (cond
                        ((stringp response) response)
@@ -318,7 +388,10 @@ Ensure it is a proper special-mode and make it writable for appends."
                            (goto-char beg)
                            (insert s))))
                      (gptx--maybe-indent beg (min (point-max) end))))))
-             (message "[gptel] done model=%s" (format "%s" gptel-model))))))))))
+             (message "[gptel] done model=%s" (format "%s" gptel-model)))))
+         ;; Stop spinners in all involved buffers
+         (gptx--spinner-stop buf)
+         (gptx--spinner-stop chatb))))))
 
 ;; ----- Public commands ----------------------------------------------
 
