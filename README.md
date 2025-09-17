@@ -27,17 +27,17 @@ region or on the whole buffer when no region is active (see
 
 ### Non-mutating
 
-* `gptx-review`: Review code. Focus on correctness and risk.
-* `gptx-explain`: Explain intent, flow, invariants, complexity, and edge cases.
-* `gptx-ask`: Answer a free-form question about the code with minimal snippets.
-* `gptx-write-unit-tests`: Generate focused unit tests and a compact test plan.
-* `gptx-debug-code`: Produce a concrete debugging plan with optional tiny diffs.
-* `gptx-troubleshoot-code`: Identify likely failure points and fixes by inspection.
+* `gptx-review` - Review code. Focus on correctness and risk.
+* `gptx-explain` - Explain intent, flow, invariants, complexity, and edge cases.
+* `gptx-ask` - Answer a free-form question about the code with minimal snippets.
+* `gptx-write-unit-tests` - Generate focused unit tests and a compact test plan.
+* `gptx-debug-code` - Produce a concrete debugging plan with optional tiny diffs.
+* `gptx-troubleshoot-code` - Identify likely failure points and fixes by inspection.
 
 ### Mutating
-* `gptx-change`: Rewrite region or buffer in place. Logs a unified diff.
-* `gptx-improve-code`: Improve code quality without changing public behavior.
-* `gptx-document-code`: Insert idiomatic documentation comments and docstrings only.
+* `gptx-change` - Rewrite region or buffer in place. Logs a unified diff.
+* `gptx-improve-code` - Improve code quality without changing public behavior.
+* `gptx-document-code` - Insert idiomatic documentation comments and docstrings only.
 
 ## Example usage
 
