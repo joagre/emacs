@@ -29,17 +29,17 @@
 ;; - Get an OpenAI API key from https://platform.openai.com/account/api-keys
 ;;
 ;; Non-mutating commands:
-;; - `gptx-review'          (C-c r)  Review code. Focus on correctness and risk.
-;; - `gptx-explain'         (C-c e)  Explain intent, flow, invariants, complexity, and edge cases.
-;; - `gptx-ask'             (C-c a)  Answer a free-form question about the code with minimal snippets.
-;; - `gptx-write-unit-tests'(C-c u)  Generate focused unit tests and a compact test plan.
-;; - `gptx-debug-code'      (C-c d)  Produce a concrete debugging plan with optional tiny diffs.
-;; - `gptx-troubleshoot-code'(C-c t) Identify likely failure points and fixes by inspection.
+;; - gptx-review: Review code. Focus on correctness and risk.
+;; - gptx-explain: Explain intent, flow, invariants, complexity, and edge cases.
+;; - gptx-ask: Answer a free-form question about the code with minimal snippets.
+;; - gptx-write-unit-tests: Generate focused unit tests and a compact test plan.
+;; - gptx-debug-code: Produce a concrete debugging plan with optional tiny diffs.
+;; - gptx-troubleshoot-code: Identify likely failure points and fixes by inspection.
 ;;
 ;; Mutating commands:
-;; - `gptx-change'          (C-c c)  Rewrite region or buffer in place. Logs a unified diff.
-;; - `gptx-improve-code'    (C-c h)  Improve code quality without changing public behavior.
-;; - `gptx-document-code'   (C-c D)  Insert idiomatic documentation comments and docstrings only.
+;; - gptx-change: Rewrite region or buffer in place. Logs a unified diff.
+;; - gptx-improve-code: Improve code quality without changing public behavior.
+;; - gptx-document-code: Insert idiomatic documentation comments and docstrings only.
 ;;
 ;; Example usage:
 ;;   (require 'gptx)
