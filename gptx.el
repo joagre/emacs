@@ -82,6 +82,20 @@
 (defvar-local gptx--spinner nil
   "Buffer-local spinner object for gptx activity.")
 
+(defcustom gptx-log-window-placement 'right
+  "Where to show the log buffer.
+Valid values: 'right, 'left, 'below, 'above."
+  :type '(choice (const :tag "Right" right)
+                 (const :tag "Left"  left)
+                 (const :tag "Below" below)
+                 (const :tag "Above" above))
+  :group 'gptx)
+
+(defcustom gptx-log-window-size 0.40
+  "Fraction of frame width/height for the log window."
+  :type 'number
+  :group 'gptx)
+
 ;; ----- Backend bootstrap --------------------------------------------
 
 (defun gptx--ensure-backend ()
@@ -148,7 +162,12 @@ Ensure it is a proper special-mode and make it writable for appends."
          (win (or (get-buffer-window buf t)
                   (display-buffer
                    buf
-                   '((display-buffer-reuse-window display-buffer-pop-up-window)
+                   `((display-buffer-in-side-window)
+                     (side . ,gptx-log-window-placement)
+                     ,(if (memq gptx-log-window-placement '(left right))
+                          (cons 'window-width gptx-log-window-size)
+                        (cons 'window-height gptx-log-window-size))
+                     (slot . 0)
                      (inhibit-same-window . t))))))
     (when win
       (with-current-buffer buf
@@ -192,7 +211,7 @@ Ensure it is a proper special-mode and make it writable for appends."
     (let ((start (point)))
       (insert (format "=== %s | %s | %s%s ===\n\n"
                       title
-                      (format-time-string "%Y-%m-%d %H:%M:%S")
+                      (format-time-string "%H:%M:%S")
                       (or model "unknown")
                       (if session (format " | %s" session) "")))
       (copy-marker start t))))
