@@ -24,9 +24,9 @@
 
 ;; Installation:
 ;; - Install the gptel package
-;; - Put this file in your load-path
-;; - Put the OpenAI API key in ~/.authinfo
+;; - Put gptx.el in your load-path
 ;; - Get an OpenAI API key from https://platform.openai.com/account/api-keys
+;; - Put the OpenAI API key in ~/.authinfo
 ;;
 ;; Non-mutating commands:
 ;; - gptx-review - Review code. Focus on correctness and risk.

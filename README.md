@@ -18,9 +18,9 @@ region or on the whole buffer when no region is active (see
 ## Installation
 
 * Install the gptel package
-* Put this file in your load-path
-* Put the OpenAI API key in ~/.authinfo
+* Put gotx.el in your load-path
 * Get an OpenAI API key from https://platform.openai.com/account/api-keys
+* Put the OpenAI API key in ~/.authinfo
 
 ## Commands
 
