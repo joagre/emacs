@@ -388,10 +388,13 @@ otherwise falls back to a trivial internal implementation."
          (hdr (gptx--insert-log-header logb "Change code" gptel-model sname))
          (l1 (line-number-at-pos beg))
          (l2 (line-number-at-pos (max beg (1- end))))
-         (payload (concat (string-trim-right prompt)
-                          (format "\n\n---\nRewrite ONLY this code.\nRange: lines %d..%d\n" l1 l2)
-                          "Return code only (no prose). Fences allowed.\n\n"
-                          input)))
+         (payload
+          (concat (string-trim-right prompt)
+                  (format
+                   "\n\n---\nRewrite ONLY this code.\nRange: lines %d..%d\n" l1
+                   l2)
+                  "Return code only (no prose). Fences allowed.\n\n"
+                  input)))
     ;; Write header with file and range info
     (when (buffer-live-p logb)
       (with-current-buffer logb
@@ -430,7 +433,8 @@ otherwise falls back to a trivial internal implementation."
               (t
                (let* ((rs   (cond
                              ((stringp response) response)
-                             ((and (listp response) (plist-get response :content))
+                             ((and (listp response)
+                                   (plist-get response :content))
                               (plist-get response :content))
                              (t (format "%s" response))))
                       (body (gptx--strip-fences (string-trim rs)))
@@ -456,7 +460,8 @@ otherwise falls back to a trivial internal implementation."
                                    (replace-region-contents beg end
                                                             (lambda (_a _b) out))
                                  (wrong-number-of-arguments
-                                  (replace-region-contents beg end (lambda () out))))
+                                  (replace-region-contents beg end
+                                                           (lambda () out))))
                              (atomic-change-group
                                (delete-region beg end)
                                (goto-char beg)
@@ -486,76 +491,6 @@ otherwise falls back to a trivial internal implementation."
          ;; Keep log window focused at header
          (when (and (window-live-p win) (markerp hdr))
            (set-window-point win (marker-position hdr))))))))
-
-
-
-
-;; (defun gptx--change (prompt beg end)
-;;   "Rewrite [BEG, END) with PROMPT."
-;;   (gptx--ensure-backend)
-;;   (let* ((buf (current-buffer))
-;;          (chatb (gptx--ensure-session-buffer))
-;;          (_model (gptx--ensure-symbol-model chatb gptx-model))
-;;          (input (gptx--slice beg end))
-;;          (payload (concat (string-trim-right prompt)
-;;                           "\n\n---\nRewrite ONLY this code.\n"
-;;                           "Return code only (no prose). Fences allowed.\n\n"
-;;                           input)))
-;;     ;; Start spinners in all involved buffers
-;;     (gptx--spinner-start buf)
-;;     (gptx--spinner-start chatb)
-;;     ;; Send request
-;;     (message "[gptel] change %d chars model=%s session=%s"
-;;              (length payload) (format "%s" gptel-model) (buffer-name chatb))
-;;     (gptel-request
-;;      payload
-;;      :buffer  chatb
-;;      :system  gptx-system
-;;      :callback
-;;      (lambda (response info)
-;;        (let* ((err (plist-get info :error))
-;;               (status (plist-get info :status))
-;;               (http (plist-get info :http-status)))
-;;          (cond
-;;           (err (message "[gptel] ERROR (http=%s status=%s): %s"
-;;                         (or http "?") (or status "?")
-;;                         (if (stringp err) err (format "%S" err))))
-;;           (t
-;;            (let* ((rs (cond
-;;                        ((stringp response) response)
-;;                        ((and (listp response) (plist-get response :content))
-;;                         (plist-get response :content))
-;;                        (t (format "%s" response))))
-;;                   (body (gptx--strip-fences (string-trim rs)))
-;;                   (s (if (and (stringp body) (not (string-empty-p body))) body
-;;                        (string-trim rs))))
-;;              (if (string-empty-p s)
-;;                  (progn
-;;                    (message "[gptel] empty after strip (http=%s status=%s)"
-;;                             (or http "?") (or status "?"))
-;;                    (message "[gptel] raw: %.200s" rs))
-;;                (when (buffer-live-p buf)
-;;                  (with-current-buffer buf
-;;                    (let ((inhibit-modification-hooks t)
-;;                          (inhibit-message t)
-;;                          (message-log-max nil)
-;;                          (inhibit-redisplay t))
-;;                      (save-excursion
-;;                        (if (fboundp 'replace-region-contents) ; Emacs 29+
-;;                            (condition-case _
-;;                                (replace-region-contents beg end
-;;                                                         (lambda (_a _b) s))
-;;                              (wrong-number-of-arguments
-;;                               (replace-region-contents beg end (lambda () s))))
-;;                          (atomic-change-group
-;;                            (delete-region beg end)
-;;                            (goto-char beg)
-;;                            (insert s))))
-;;                      (gptx--maybe-indent beg (min (point-max) end))))))
-;;              (message "[gptel] done model=%s" (format "%s" gptel-model)))))
-;;          ;; Stop spinners in all involved buffers
-;;          (gptx--spinner-stop buf)
-;;          (gptx--spinner-stop chatb))))))
 
 ;; ----- Public commands ----------------------------------------------
 
