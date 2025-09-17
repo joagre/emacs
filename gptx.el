@@ -237,17 +237,20 @@ Ensure it is a proper special-mode and make it writable for appends."
         (insert "\n\n"))
       (gptx--trim-log buf))))
 
-(defun gptx--insert-log-header (buf title model &optional session)
-  "Insert a banner into BUF and return a marker at its beginning."
-  (with-current-buffer buf
-    (goto-char (point-max))
-    (let ((start (point)))
-      (insert (format "=== %s | %s | %s%s ===\n\n"
-                      title
-                      (format-time-string "%Y-%m-%d %H:%M:%S")
-                      (or model "unknown")
-                      (if session (format " | %s" session) "")))
-      (copy-marker start t))))
+(defun gptx--insert-log-header (logb title model session &optional question)
+  "Insert a log header into LOGB and return a marker at its start.
+If QUESTION is non-nil, include it below the header."
+  (with-current-buffer logb
+    (let ((inhibit-read-only t))
+      (goto-char (point-max))
+      (let ((start (point)))
+        (insert (format "=== %s | %s | %s%s ===\n\n"
+                        title
+                        (format-time-string "%Y-%m-%d %H:%M:%S")
+                        (or model "unknown")
+                        (if session (format " | %s" session) "")))
+        (when question (insert "Question: " question "\n\n"))
+        (copy-marker start t)))))
 
 ;; ----- Mode-line spinner --------------------------------------------
 
@@ -366,14 +369,8 @@ otherwise falls back to a trivial internal implementation."
          (logb (car bw))
          (win (cdr bw))
          (sname (buffer-name chatb))
-         (hdr (gptx--insert-log-header logb log-title gptel-model sname))
+         (hdr (gptx--insert-log-header logb log-title gptel-model sname question))
          (payload (concat prompt code)))
-    ;; Write header and optional question.
-    (when question
-      (with-current-buffer logb
-        (let ((inhibit-read-only t))
-          (goto-char (marker-position hdr))
-          (insert "Question: " question "\n\n"))))
     ;; Focus the log buffer at the header.
     (when (and (window-live-p win) (markerp hdr))
       (set-window-point win (marker-position hdr)))
@@ -408,7 +405,7 @@ otherwise falls back to a trivial internal implementation."
          (when (and (window-live-p win) (markerp hdr))
            (set-window-point win (marker-position hdr))))))))
 
-(defun gptx--change (prompt beg end)
+(defun gptx--change (log-title prompt beg end)
   "Rewrite [BEG, END) with PROMPT."
   (gptx--ensure-backend)
   (let* ((buf (current-buffer))
@@ -419,7 +416,7 @@ otherwise falls back to a trivial internal implementation."
          (logb (car bw))
          (win (cdr bw))
          (sname (buffer-name chatb))
-         (hdr (gptx--insert-log-header logb "Change code" gptel-model sname))
+         (hdr (gptx--insert-log-header logb log-title gptel-model sname))
          (l1 (line-number-at-pos beg))
          (l2 (line-number-at-pos (max beg (1- end))))
          (payload
@@ -429,13 +426,6 @@ otherwise falls back to a trivial internal implementation."
                    l2)
                   "Return code only (no prose). Fences allowed.\n\n"
                   input)))
-    ;; Write header with file and range info
-    (when (buffer-live-p logb)
-      (with-current-buffer logb
-        (let ((inhibit-read-only t))
-          (goto-char (marker-position hdr))
-          (insert (format "File: %s\nRange: %d..%d\n\n"
-                          (or buffer-file-name (buffer-name buf)) l1 l2)))))
     ;; Focus the log buffer at the header
     (when (and (window-live-p win) (markerp hdr))
       (set-window-point win (marker-position hdr)))
@@ -584,7 +574,7 @@ CODE:\n\n"
   (interactive "sChange request: ")
   (cl-destructuring-bind (beg . end) (gptx--region-or-buffer)
     (deactivate-mark)
-    (gptx--change prompt beg end)))
+    (gptx--change "Change code" prompt beg end)))
 
 ;;;###autoload
 (defun gptx-write-unit-tests ()
@@ -642,6 +632,7 @@ CODE:\n\n"
   (cl-destructuring-bind (beg . end) (gptx--region-or-buffer)
     (deactivate-mark)
     (gptx--change
+     "Improve code"
      "Improve this code without changing public behavior.\n\
 - Keep semantics and public API stable; preserve I/O, error shapes, and concurrency semantics.\n\
 - Remove duplication and dead code; simplify control flow; prefer clear names and small functions.\n\
@@ -658,6 +649,7 @@ CODE:\n\n"
   (cl-destructuring-bind (beg . end) (gptx--region-or-buffer)
     (deactivate-mark)
     (gptx--change
+     "Document code"
      "Add documentation comments and docstrings to this code. No behavior changes.\n\
 - Detect the language and use its idiomatic style: docstrings for Python, JSDoc for JS/TS, Doxygen for C/C++, Elisp-style commentary for Emacs Lisp, etc.\n\
 - For each public function, class, and module: describe purpose, parameters, return values, side effects, error conditions, and preconditions.\n\
