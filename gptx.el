@@ -290,6 +290,35 @@ Ensure it is a proper special-mode and make it writable for appends."
           (indent-region (max (point-min) beg)
                          (min (point-max) end)))))))
 
+(defun gptx--unified-diff (old new &optional label-old label-new)
+  "Return a unified diff string comparing OLD and NEW.
+Labels default to 'a' and 'b'. Uses external diff if available,
+otherwise falls back to a trivial internal implementation."
+  (let* ((file-a (make-temp-file "gptx-old"))
+         (file-b (make-temp-file "gptx-new"))
+         (lab-a (or label-old "a"))
+         (lab-b (or label-new "b"))
+         result)
+    (unwind-protect
+        (progn
+          (with-temp-file file-a (insert old))
+          (with-temp-file file-b (insert new))
+          (if (executable-find "diff")
+              ;; External diff gives proper unified format
+              (with-temp-buffer
+                (call-process "diff" nil t nil "-u"
+                              (format "--label=%s" lab-a)
+                              (format "--label=%s" lab-b)
+                              file-a file-b)
+                (setq result (buffer-string)))
+            ;; Crude fallback: show both strings if no diff
+            (setq result (concat "--- " lab-a "\n+++ " lab-b
+                                 "\n[no external diff available]\n"
+                                 "OLD:\n" old "\n\nNEW:\n" new "\n"))))
+      (ignore-errors (delete-file file-a))
+      (ignore-errors (delete-file file-b)))
+    result))
+
 ;; ----- Core plumbing ------------------------------------------------
 
 (defun gptx--prompt (log-title prompt question beg end)
@@ -316,8 +345,7 @@ Ensure it is a proper special-mode and make it writable for appends."
     ;; Start spinners in all involved buffers
     (gptx--spinner-start (current-buffer))
     (gptx--spinner-start chatb)
-    (when (buffer-live-p logb)
-      (gptx--spinner-start logb))
+    (when (buffer-live-p logb) (gptx--spinner-start logb))
     ;; Send request
     (message "[gptel] prompt %d chars model=%s session=%s"
              (length payload) (format "%s" gptel-model) sname)
@@ -342,6 +370,7 @@ Ensure it is a proper special-mode and make it writable for appends."
                       (plist-get response :content))
                      (t (format "%s" response)))))
          (gptx--log-insert logb text)
+         ;; Keep log window focused at header
          (when (and (window-live-p win) (markerp hdr))
            (set-window-point win (marker-position hdr))))))))
 
@@ -352,65 +381,181 @@ Ensure it is a proper special-mode and make it writable for appends."
          (chatb (gptx--ensure-session-buffer))
          (_model (gptx--ensure-symbol-model chatb gptx-model))
          (input (gptx--slice beg end))
+         (bw (gptx--open-log))
+         (logb (car bw))
+         (win (cdr bw))
+         (sname (buffer-name chatb))
+         (hdr (gptx--insert-log-header logb "Change code" gptel-model sname))
+         (l1 (line-number-at-pos beg))
+         (l2 (line-number-at-pos (max beg (1- end))))
          (payload (concat (string-trim-right prompt)
-                          "\n\n---\nRewrite ONLY this code.\n"
+                          (format "\n\n---\nRewrite ONLY this code.\nRange: lines %d..%d\n" l1 l2)
                           "Return code only (no prose). Fences allowed.\n\n"
                           input)))
+    ;; Write header with file and range info
+    (when (buffer-live-p logb)
+      (with-current-buffer logb
+        (let ((inhibit-read-only t))
+          (goto-char (marker-position hdr))
+          (insert (format "File: %s\nRange: %d..%d\n\n"
+                          (or buffer-file-name (buffer-name buf)) l1 l2)))))
+    ;; Focus the log buffer at the header
+    (when (and (window-live-p win) (markerp hdr))
+      (set-window-point win (marker-position hdr)))
     ;; Start spinners in all involved buffers
     (gptx--spinner-start buf)
     (gptx--spinner-start chatb)
+    (when (buffer-live-p logb) (gptx--spinner-start logb))
     ;; Send request
     (message "[gptel] change %d chars model=%s session=%s"
              (length payload) (format "%s" gptel-model) (buffer-name chatb))
     (gptel-request
      payload
-     :buffer  chatb
-     :system  gptx-system
+     :buffer chatb
+     :system gptx-system
      :callback
      (lambda (response info)
-       (let* ((err (plist-get info :error))
-              (status (plist-get info :status))
-              (http (plist-get info :http-status)))
-         (cond
-          (err (message "[gptel] ERROR (http=%s status=%s): %s"
-                        (or http "?") (or status "?")
-                        (if (stringp err) err (format "%S" err))))
-          (t
-           (let* ((rs (cond
-                       ((stringp response) response)
-                       ((and (listp response) (plist-get response :content))
-                        (plist-get response :content))
-                       (t (format "%s" response))))
-                  (body (gptx--strip-fences (string-trim rs)))
-                  (s (if (and (stringp body) (not (string-empty-p body))) body
-                       (string-trim rs))))
-             (if (string-empty-p s)
-                 (progn
-                   (message "[gptel] empty after strip (http=%s status=%s)"
-                            (or http "?") (or status "?"))
-                   (message "[gptel] raw: %.200s" rs))
-               (when (buffer-live-p buf)
-                 (with-current-buffer buf
-                   (let ((inhibit-modification-hooks t)
-                         (inhibit-message t)
-                         (message-log-max nil)
-                         (inhibit-redisplay t))
-                     (save-excursion
-                       (if (fboundp 'replace-region-contents) ; Emacs 29+
-                           (condition-case _
-                               (replace-region-contents beg end
-                                                        (lambda (_a _b) s))
-                             (wrong-number-of-arguments
-                              (replace-region-contents beg end (lambda () s))))
-                         (atomic-change-group
-                           (delete-region beg end)
-                           (goto-char beg)
-                           (insert s))))
-                     (gptx--maybe-indent beg (min (point-max) end))))))
-             (message "[gptel] done model=%s" (format "%s" gptel-model)))))
+       (unwind-protect
+           (let* ((err (plist-get info :error))
+                  (status (plist-get info :status))
+                  (http (plist-get info :http-status)))
+             (cond
+              (err
+               (let ((msg (format "[gptel] ERROR (http=%s status=%s): %s"
+                                  (or http "?") (or status "?")
+                                  (if (stringp err) err (format "%S" err)))))
+                 (message "%s" msg)
+                 (when (buffer-live-p logb)
+                   (gptx--log-insert logb msg))))
+              (t
+               (let* ((rs   (cond
+                             ((stringp response) response)
+                             ((and (listp response) (plist-get response :content))
+                              (plist-get response :content))
+                             (t (format "%s" response))))
+                      (body (gptx--strip-fences (string-trim rs)))
+                      (out  (if (and (stringp body) (not (string-empty-p body)))
+                                body
+                              (string-trim rs))))
+                 (if (string-empty-p out)
+                     (progn
+                       (message "[gptel] empty after strip (http=%s status=%s)"
+                                (or http "?") (or status "?"))
+                       (when (buffer-live-p logb)
+                         (gptx--log-insert logb "[note] No change produced.")))
+                   ;; Apply change
+                   (when (buffer-live-p buf)
+                     (with-current-buffer buf
+                       (let ((inhibit-modification-hooks t)
+                             (inhibit-message t)
+                             (message-log-max nil)
+                             (inhibit-redisplay t))
+                         (save-excursion
+                           (if (fboundp 'replace-region-contents)
+                               (condition-case _
+                                   (replace-region-contents beg end
+                                                            (lambda (_a _b) out))
+                                 (wrong-number-of-arguments
+                                  (replace-region-contents beg end (lambda () out))))
+                             (atomic-change-group
+                               (delete-region beg end)
+                               (goto-char beg)
+                               (insert out))))
+                         (gptx--maybe-indent beg (min (point-max) end)))))
+                   ;; Compute and append diff
+                   (when (buffer-live-p logb)
+                     (let* ((label-old
+                             (format "%s:before[%d..%d]"
+                                     (or buffer-file-name (buffer-name buf)) l1
+                                     l2))
+                            (label-new
+                             (format "%s:after[%d..%d]"
+                                     (or buffer-file-name (buffer-name buf)) l1
+                                     l2))
+                            (udiff (gptx--unified-diff input out label-old
+                                                       label-new)))
+                       (gptx--log-insert logb
+                                         (if (string-empty-p (string-trim udiff))
+                                             "[diff] No textual differences."
+                                           udiff)))))
+                 (message "[gptel] done model=%s" (format "%s" gptel-model))))))
          ;; Stop spinners in all involved buffers
          (gptx--spinner-stop buf)
-         (gptx--spinner-stop chatb))))))
+         (gptx--spinner-stop chatb)
+         (when (buffer-live-p logb) (gptx--spinner-stop logb))
+         ;; Keep log window focused at header
+         (when (and (window-live-p win) (markerp hdr))
+           (set-window-point win (marker-position hdr))))))))
+
+
+
+
+;; (defun gptx--change (prompt beg end)
+;;   "Rewrite [BEG, END) with PROMPT."
+;;   (gptx--ensure-backend)
+;;   (let* ((buf (current-buffer))
+;;          (chatb (gptx--ensure-session-buffer))
+;;          (_model (gptx--ensure-symbol-model chatb gptx-model))
+;;          (input (gptx--slice beg end))
+;;          (payload (concat (string-trim-right prompt)
+;;                           "\n\n---\nRewrite ONLY this code.\n"
+;;                           "Return code only (no prose). Fences allowed.\n\n"
+;;                           input)))
+;;     ;; Start spinners in all involved buffers
+;;     (gptx--spinner-start buf)
+;;     (gptx--spinner-start chatb)
+;;     ;; Send request
+;;     (message "[gptel] change %d chars model=%s session=%s"
+;;              (length payload) (format "%s" gptel-model) (buffer-name chatb))
+;;     (gptel-request
+;;      payload
+;;      :buffer  chatb
+;;      :system  gptx-system
+;;      :callback
+;;      (lambda (response info)
+;;        (let* ((err (plist-get info :error))
+;;               (status (plist-get info :status))
+;;               (http (plist-get info :http-status)))
+;;          (cond
+;;           (err (message "[gptel] ERROR (http=%s status=%s): %s"
+;;                         (or http "?") (or status "?")
+;;                         (if (stringp err) err (format "%S" err))))
+;;           (t
+;;            (let* ((rs (cond
+;;                        ((stringp response) response)
+;;                        ((and (listp response) (plist-get response :content))
+;;                         (plist-get response :content))
+;;                        (t (format "%s" response))))
+;;                   (body (gptx--strip-fences (string-trim rs)))
+;;                   (s (if (and (stringp body) (not (string-empty-p body))) body
+;;                        (string-trim rs))))
+;;              (if (string-empty-p s)
+;;                  (progn
+;;                    (message "[gptel] empty after strip (http=%s status=%s)"
+;;                             (or http "?") (or status "?"))
+;;                    (message "[gptel] raw: %.200s" rs))
+;;                (when (buffer-live-p buf)
+;;                  (with-current-buffer buf
+;;                    (let ((inhibit-modification-hooks t)
+;;                          (inhibit-message t)
+;;                          (message-log-max nil)
+;;                          (inhibit-redisplay t))
+;;                      (save-excursion
+;;                        (if (fboundp 'replace-region-contents) ; Emacs 29+
+;;                            (condition-case _
+;;                                (replace-region-contents beg end
+;;                                                         (lambda (_a _b) s))
+;;                              (wrong-number-of-arguments
+;;                               (replace-region-contents beg end (lambda () s))))
+;;                          (atomic-change-group
+;;                            (delete-region beg end)
+;;                            (goto-char beg)
+;;                            (insert s))))
+;;                      (gptx--maybe-indent beg (min (point-max) end))))))
+;;              (message "[gptel] done model=%s" (format "%s" gptel-model)))))
+;;          ;; Stop spinners in all involved buffers
+;;          (gptx--spinner-stop buf)
+;;          (gptx--spinner-stop chatb))))))
 
 ;; ----- Public commands ----------------------------------------------
 
