@@ -1,11 +1,3 @@
-Let is discuss the function gptx--prompt below. Maybe it would be better to change it this way:
-
-* If the selected region is larger that gptx-max-region-size then the command is rejected. The same if no region is selected, i.e. the whole buffer must no be larger than gptx-max-region-size. gptx-max-region-size must be set to a reasonble figure.
-
-* If the selected region is less than gptx-max-region-size (a reasonable value) then we attach the region to the payload prompt but we add a halo of code above and below the the selcted region. That we do that must be made explicit in the prompt and the begin and end rows of the actual region we have selected must be provided as start and end line numbers. The name of the file must also be specified to give the session more state. The name of the file is repo-name:rel-path-in-repo.
-
-What do you think. Generate no code.
-
 ;;; gptx.el --- Lean, predictable gptel workflows for code  -*- lexical-binding: t; -*-
 ;;
 ;; Author: Joakim G.
