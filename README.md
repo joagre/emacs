@@ -53,7 +53,7 @@ M-x package-install RET spinner RET
 
 (Ensure GNU ELPA and/or MELPA are present in `package-archives`)
 
-## OpenAI API key (choose ONE)
+### OpenAI API key (choose ONE)
 
 * Environment: export OPENAI_API_KEY="sk-***"
 * Or a row in ~/.authinfo or ~/.authinfo.gpg such as "machine api.openai.com login apikey password sk-***"
